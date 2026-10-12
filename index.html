@@ -227,15 +227,15 @@ const CONFIG = {
       warResolute: "Argentina couldn't tell resolute from bluffing, so a risky move led to war. Private information plus the temptation to bluff can cause war even when both sides would prefer a deal.",
       warWeak: "Britain was weak but fought anyway, so both sides paid for a war that a deal could have avoided.",
       bluffCalled: "A bluff only works if the other side believes it. When weak types bluff often, resistance stops being convincing.",
-      bluffWorked: "Britain's bluff worked: Argentina couldn't tell it from real resolve and backed off. That is the temptation to bluff in action.",
-      genuineReject: "Britain's rejection was genuine and Argentina backed off, so no one fought.",
-      armsRace: "An arms build-up signals resolve, but both sides pay for it even if war never comes.",
-      buildUpWorked: "Britain was resolute but gave in once Argentina mobilized. The build-up paid off for Argentina this time.",
+      bluffWorked: "Britain's bluff worked: Argentina couldn't tell it from real resolve and backed off. The temptation to bluff.",
+      genuineReject: "Britain's rejection was real and Argentina backed off so no one fought.",
+      armsRace: "An arms build up signals resolve, but both sides pay for it even if war never comes.",
+      buildUpWorked: "Britain was resolute but gave in once Argentina mobilized. The build up paid off for Argentina... this time.",
       resoluteCaved: "Britain was resolute but gave in once force was used. Argentina's gamble paid off this time.",
-      noWar: "No war: the side that would lose more gave way, or the claim was never pressed.",
+      noWar: "No war: the side that would lose more gave way or the claim was never pressed.",
       reputation: "Backing down once can invite more demands; standing firm can deter them, but also risks war when the other side is resolute too."
     },
-    stylized: "Payoffs are stylized for teaching; not historical estimates.",
+    stylized: "Payoffs are just for teaching puroses and aren't historically accurate.",
     citation: "Based on James D. Fearon, \"Rationalist Explanations for War\" (1995)."
   }
 };
@@ -248,10 +248,10 @@ const A  = k => L.actions[k];                        // action label
 const TN = t => L.types[t];                          // type label
 const lc = s => s.toLowerCase();
 const num = x => String(+(+x).toFixed(2));           // plain number: 1.5
-function f(x){                                       // signed payoff: +8.5, −3, 0
+function f(x){                                       // signed payoff: +8.5, -3, 0
   if (Math.abs(x) < 0.005) return "0";
   const s = Math.abs(x).toFixed(2).replace(/\.?0+$/, "");
-  return (x > 0 ? "+" : "−") + s;
+  return (x > 0 ? "+" : "-") + s;
 }
 const clampP = p => Math.min(C.probLimits[1], Math.max(C.probLimits[0], p));
 
@@ -328,7 +328,7 @@ const STEPS = 6;
 const CONCEDE = new Set(["givein", "giveup", "backdown"]);
 const moverOf = n => (n % 2 ? "A" : "B");
 function nextOf(n, k){ return k === OPTIONS[n][0] ? LEAF_OF[n] : (n === STEPS ? "war" : n + 1); }
-const MODE_TXT = { A: "Argentina vs. computer", B: "Britain vs. computer", "2P": "Two players, one device" };
+const MODE_TXT = { A: "Argentina vs. computer", B: "Britain vs. computer", "2P": "Two players using one device" };
 
 /* ---------- Seats (who scores) and roles ---------- */
 const compRole = () => (S.mode === "A" ? "B" : "A");
@@ -666,7 +666,7 @@ function showStart(){
     <fieldset class="card"><legend>Choose how to play</legend>
       ${radio("A", "Play Argentina vs. computer")}
       ${radio("B", "Play Britain vs. computer")}
-      ${radio("2P", "Two players, one device (swap sides each crisis)")}
+      ${radio("2P", "Two players on one device (swap sides each crisis)")}
     </fieldset>
     ${btn("Start", () => newMatch(root.querySelector("input[name=mode]:checked").value), "", true)}
     <p class="stylized">${L.stylized} ${L.citation}</p>`, true);
