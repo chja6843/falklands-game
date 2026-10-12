@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Falklands Crisis Bargaining Game</title>
+<style>
+/* ---------- Theme (high contrast; dark mode follows the device setting) ---------- */
+:root{
+  --bg:#fbfbf8; --fg:#111; --muted:#3d3d3d; --card:#fff; --line:#1a1a1a;
+  --accent:#0b4f9c; --accent-fg:#fff; --good:#0a6b2f; --bad:#a30d0d;
+  --soft:#eaf1fa; --border:#5c5c5c; --hl:#0b4f9c;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#121417; --fg:#f3f3f3; --muted:#cfcfcf; --card:#1c1f24; --line:#ececec;
+    --accent:#8fc1ff; --accent-fg:#071320; --good:#86e8a3; --bad:#ffa3a3;
+    --soft:#1f2a38; --border:#a7adb4; --hl:#8fc1ff;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:10px 16px}
+h1{font-size:1.35rem;margin:.2em 0 .4em;line-height:1.25}
+h2{font-size:1.12rem;margin:.2em 0 .3em}
+p{margin:.45em 0}
+.card{background:var(--card);border:2px solid var(--border);border-radius:10px;padding:12px 14px;margin:10px 0}
+button{font:inherit;min-height:48px;padding:10px 18px;border-radius:8px;border:2px solid var(--accent);
+  background:var(--accent);color:var(--accent-fg);font-weight:650;cursor:pointer;margin:6px 6px 6px 0}
+button.secondary{background:transparent;color:var(--accent)}
+/* Both choices look identical, so neither option is visually nudged. */
+button.choice{display:block;width:100%;min-height:56px;font-size:1.1rem;margin:8px 0;background:var(--card);color:var(--fg);border:3px solid var(--accent)}
+button.guess{display:block;width:100%;text-align:left;background:var(--card);color:var(--fg);border:3px solid var(--accent);margin:8px 0}
+button.guess .small{font-weight:500}
+button:focus-visible,input:focus-visible{outline:3px solid var(--hl);outline-offset:3px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.topbar > button{flex:none;min-height:44px;padding:8px 14px;margin:0}
+.score{margin:0;font-size:1rem;line-height:1.35;flex:1;min-width:0}
+.badge{display:inline-block;border:3px solid var(--accent);background:var(--soft);border-radius:8px;padding:5px 12px;font-weight:700;margin:4px 0}
+.situation{font-size:1.1rem;font-weight:600}
+.small{font-size:.92rem;color:var(--muted)}
+.stylized{font-size:.85rem;font-style:italic;color:var(--muted);margin:.4em 0 0}
+.good{color:var(--good);font-weight:700}
+.bad{color:var(--bad);font-weight:700}
+/* Phone: info, then tree, then a choice bar that stays pinned to the bottom of the screen.
+   Wide screen: tree on the left, info and choices on the right. */
+.layout{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.layout > .card{margin:0}
+.choices{position:sticky;bottom:0;z-index:2;display:flex;gap:10px;align-items:center;background:var(--bg);
+  padding:8px 0 12px;border-top:2px solid var(--border)}
+.choices button.choice{flex:1 1 0;min-width:0;margin:0;padding:10px 8px}
+@media (min-width:860px){
+  .layout{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-rows:auto 1fr;align-items:start;column-gap:16px;row-gap:6px}
+  .treewrap{grid-column:1;grid-row:1 / span 2}
+  .panel{grid-column:2;grid-row:1}
+  .choices{grid-column:2;grid-row:2;position:static;flex-direction:column;align-items:stretch;border-top:0;padding-top:0}
+  .choices button.choice{flex:none;margin:6px 0}
+}
+fieldset{border:0;padding:0;margin:0}
+legend{font-weight:700;font-size:1.1rem;margin-bottom:4px}
+label.opt{display:flex;gap:10px;align-items:center;padding:10px;border:2px solid var(--border);border-radius:8px;margin:8px 0;min-height:52px;cursor:pointer}
+input[type=radio]{width:22px;height:22px;flex:none}
+table{border-collapse:collapse;width:100%}
+td,th{border:1px solid var(--border);padding:5px 8px;text-align:left}
+.chips{list-style:none;padding:0;margin:8px 0;display:flex;flex-wrap:wrap;gap:6px}
+.chips li{border:2px solid var(--border);border-radius:8px;padding:3px 8px;font-size:.9rem}
+.chips li.war{border:3px solid var(--bad)}
+.handoff{min-height:70vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+/* "Thinking" indicator for the computer */
+.thinking{font-size:1.1rem;font-weight:600;margin:6px 0}
+.dots span{animation:blink 1.2s infinite both}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.15}40%{opacity:1}}
+@media (prefers-reduced-motion: reduce){ .dots span{animation:none} }
+/* ---------- Game tree (SVG) ---------- */
+.tree{width:100%;max-width:560px;display:block;margin:0 auto}
+.tree text{fill:var(--fg);font-family:inherit}
+.br{stroke:var(--line);stroke-width:2.5;fill:none}
+.br.taken{stroke:var(--hl);stroke-width:8}
+.node{fill:var(--card);stroke:var(--line);stroke-width:2.5}
+.node.cur{stroke:var(--hl);stroke-width:7}
+.leaf{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+.leaf.end{stroke:var(--hl);stroke-width:6}
+.bl{font-size:14px;font-weight:600}
+.bl.taken{font-weight:800}
+.lt{font-size:13px}
+.ln{font-size:12.5px;font-weight:700}
+.fade{opacity:.45}
+/* Tappable branches at the current node */
+.hit{cursor:pointer}
+.hit:focus{outline:none}
+.hitbox{fill:var(--hl);fill-opacity:0;stroke:var(--hl);stroke-opacity:.6;stroke-width:2;stroke-dasharray:5 4}
+.hit:hover .hitbox{fill-opacity:.14}
+.hit:focus-visible .hitbox{fill-opacity:.25;stroke-opacity:1;stroke-width:3;stroke-dasharray:none}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<noscript>This game needs JavaScript turned on.</noscript>
+<script>
+"use strict";
+
+/* =====================================================================
+   CONFIG — every number and label you may want to edit lives here.
+   Payoffs are written as [Argentina, Britain].
+   All payoffs are STYLIZED FOR TEACHING; NOT HISTORICAL ESTIMATES.
+   If you change payoffs, open the browser console: the game prints a
+   warning if the new numbers break the logic of the game (see checkPayoffLogic).
+   ===================================================================== */
+const CONFIG = {
+  // ----- Match -----
+  // Crises per match. Keep this EVEN: in two-player mode the players swap roles every crisis,
+  // so an odd number would make one player Argentina more often. (Two-player mode rounds an odd number up.)
+  matchLength: 6,
+
+  // ----- Britain's hidden type (redrawn at random every crisis) -----
+  q: 0.40,                    // probability Britain is RESOLUTE (otherwise WEAK)
+  types: {
+    resolute: { cB: 4 },      // Britain's cost of war if RESOLUTE (low)
+    weak:     { cB: 18 }      // Britain's cost of war if WEAK (high)
+  },
+
+  // ----- War -----
+  pWin: 0.5,                  // Argentina's base probability of winning a war
+  winValue: 10,               // value of the issue to Argentina if it wins
+  loseValue: -10,             // value of the issue to Argentina if it loses
+  cA: 5,                      // Argentina's cost of fighting
+
+  // ----- Mobilization (Steps 3 and 4) -----
+  mobCost: 1.5,               // sunk cost each side pays, in every later outcome, once it mobilizes
+
+  // ----- Other end nodes -----
+  statusQuo: [0, 0],          // Argentina does nothing (Step 1)
+  britainGivesIn: [10, -10],  // Britain gives in at Step 2 (the "prize" moves from Britain to Argentina)
+  forceCost: 6,               // Argentina's cost of using force when Britain then gives in at Step 6
+                              // (kept high so calling a bluff is a real gamble, not a free move)
+  lateCost: {                 // extra cost of conceding late (waiting is costly)
+    aGiveUp3: 2,              //   Argentina gives up after Britain rejects (a failed demand)
+    bGiveIn4: 2,              //   Britain gives in after Argentina mobilizes
+    aBackDown5: 1.5,          //   Argentina backs down after both have mobilized (it also pays mobCost)
+    bGiveIn6: 3               //   Britain gives in after force is used
+  },
+  // The computed payoff table is in P() below and in the notes that came with this file.
+
+  // ----- Computer opponent: ONE hidden personality per match (chosen by weight) -----
+  // Numbers are the chance of the TOUGH move at each step. memoryWeight scales the memory effect
+  // (see memoryShift below): 0 = ignores your past behavior, 3 = reacts strongly to it.
+  computerArgentina: {
+    hawk:        { weight: 1, demand: 0.85, mobilize: 0.95, force: 0.92, memoryWeight: 0,
+                   label: "Hawk", hint: "pushes hard every time",
+                   note: "It pressed its claim and escalated in most crises." },
+    cautious:    { weight: 1, demand: 0.35, mobilize: 0.30, force: 0.15, memoryWeight: 1,
+                   label: "Cautious", hint: "rarely pushes, backs down easily",
+                   note: "It rarely pressed a claim and backed down easily." },
+    gambler:     { weight: 1, demand: 0.50, mobilize: 0.50, force: 0.50, memoryWeight: 0,
+                   label: "Gambler", hint: "a coin flip each time",
+                   note: "Its moves were close to coin flips, so there was no real pattern to find." },
+    opportunist: { weight: 1, demand: 0.45, mobilize: 0.40, force: 0.30, memoryWeight: 3,
+                   label: "Opportunist", hint: "pounces after you back down",
+                   note: "It pushed hard right after you gave in or backed down, and held back after you stood firm." }
+  },
+  computerBritain: {
+    bluffer:  { weight: 1, memoryWeight: 1, label: "Bluffer", hint: "acts tough even when weak",
+                note: "Even when it was weak, it often rejected and mobilized, hoping you would blink.",
+                resolute: { reject: 0.85, mobilize: 0.85, fight: 0.90 },
+                weak:     { reject: 0.70, mobilize: 0.65, fight: 0.10 } },
+    honest:   { weight: 1, memoryWeight: 1, label: "Honest", hint: "tough only when it is strong",
+                note: "Its toughness matched its type: weak meant giving in, resolute meant resisting.",
+                resolute: { reject: 0.90, mobilize: 0.90, fight: 0.90 },
+                weak:     { reject: 0.15, mobilize: 0.15, fight: 0.05 } },
+    stubborn: { weight: 1, memoryWeight: 0, label: "Stubborn", hint: "never backs down",
+                note: "It rejected and fought whatever its type, and paid dearly when it was weak.",
+                resolute: { reject: 0.95, mobilize: 0.95, fight: 0.95 },
+                weak:     { reject: 0.95, mobilize: 0.90, fight: 0.75 } },
+    folder:   { weight: 1, memoryWeight: 1, label: "Folder", hint: "gives in early",
+                note: "It gave in early, even when it was resolute.",
+                resolute: { reject: 0.30, mobilize: 0.35, fight: 0.75 },
+                weak:     { reject: 0.10, mobilize: 0.10, fight: 0.05 } }
+  },
+  erraticProb: 0.10,          // chance any single computer move flips to the other option
+
+  // ----- Memory / reputation (solo modes only) -----
+  // If the student conceded last crisis, the computer's tough-move chances go UP by shift × memoryWeight;
+  // if the student stood firm, they go DOWN by the same amount. (Britain's Step 6 "fight" is never adjusted.)
+  memoryShift: 0.15,
+  probLimits: [0.02, 0.98],   // no computer move is ever certain
+
+  thinkingDelayMs: 600,       // how long the computer "thinks" before moving
+
+  // ----- Text -----
+  labels: {
+    title: "The Falklands/Malvinas Crisis, 1982",
+    intro: "Play a match of crises, moving down the escalation ladder to get the best payoff you can. Argentina never knows whether Britain is resolute or weak until each crisis ends.",
+    A: "Argentina",
+    B: "Britain",
+    actions: {
+      nothing: "Do nothing", demand: "Make a demand",
+      givein: "Give in", reject: "Reject",
+      giveup: "Give up", mobilize: "Mobilize",
+      mobilizeToo: "Mobilize too",
+      backdown: "Back down", force: "Use force",
+      fight: "Fight"
+    },
+    types: { resolute: "Resolute", weak: "Weak" },
+    typeBadge: {
+      resolute: "You are RESOLUTE: war costs you little",
+      weak: "You are WEAK: war costs you a lot"
+    },
+    hiddenTypeNote: "Britain may be resolute (war costs it little) or weak (war costs it a lot). You can't see which.",
+    mobNote: "Mobilizing costs you {m} points, whatever happens next.",
+    situation: {
+      1: "A new crisis begins. Argentina moves first.",
+      2: "Argentina has made a demand.",
+      3: "Britain has rejected the demand.",
+      4: "Argentina has mobilized: its fleet is at sea.",
+      5: "Britain has mobilized too.",
+      6: "Argentina has used force."
+    },
+    leaves: {
+      sq1: "Status quo", give2: "Britain gives in",
+      up3: "Argentina gives up", give4: "Britain gives in late",
+      back5: "Argentina backs down", give6: "Britain folds under fire",
+      war: "War"
+    },
+    takeaways: {
+      warResolute: "Argentina couldn't tell resolute from bluffing, so a risky move led to war. Private information plus the temptation to bluff can cause war even when both sides would prefer a deal.",
+      warWeak: "Britain was weak but fought anyway, so both sides paid for a war that a deal could have avoided.",
+      bluffCalled: "A bluff only works if the other side believes it. When weak types bluff often, resistance stops being convincing.",
+      bluffWorked: "Britain's bluff worked: Argentina couldn't tell it from real resolve and backed off. That is the temptation to bluff in action.",
+      genuineReject: "Britain's rejection was genuine and Argentina backed off, so no one fought.",
+      armsRace: "An arms build-up signals resolve, but both sides pay for it even if war never comes.",
+      buildUpWorked: "Britain was resolute but gave in once Argentina mobilized. The build-up paid off for Argentina this time.",
+      resoluteCaved: "Britain was resolute but gave in once force was used. Argentina's gamble paid off this time.",
+      noWar: "No war: the side that would lose more gave way, or the claim was never pressed.",
+      reputation: "Backing down once can invite more demands; standing firm can deter them, but also risks war when the other side is resolute too."
+    },
+    stylized: "Payoffs are stylized for teaching; not historical estimates.",
+    citation: "Based on James D. Fearon, \"Rationalist Explanations for War\" (1995)."
+  }
+};
+/* ======================= end of CONFIG ======================= */
+
+
+/* ---------- Short names and formatting helpers ---------- */
+const C = CONFIG, L = CONFIG.labels;
+const A  = k => L.actions[k];                        // action label
+const TN = t => L.types[t];                          // type label
+const lc = s => s.toLowerCase();
+const num = x => String(+(+x).toFixed(2));           // plain number: 1.5
+function f(x){                                       // signed payoff: +8.5, −3, 0
+  if (Math.abs(x) < 0.005) return "0";
+  const s = Math.abs(x).toFixed(2).replace(/\.?0+$/, "");
+  return (x > 0 ? "+" : "−") + s;
+}
+const clampP = p => Math.min(C.probLimits[1], Math.max(C.probLimits[0], p));
+
+/* =====================================================================
+   PAYOFFS (all computed from CONFIG)
+   ===================================================================== */
+function P(){
+  const m = C.mobCost, lc2 = C.lateCost, sq = C.statusQuo, g = C.britainGivesIn;
+  const ev = C.pWin * C.winValue + (1 - C.pWin) * C.loseValue;
+  return {
+    sq1:   sq,                                                   // Step 1: Argentina does nothing
+    give2: g,                                                    // Step 2: Britain gives in
+    up3:   [sq[0] - lc2.aGiveUp3, sq[1]],                        // Step 3: Argentina gives up
+    give4: [g[0] - m, g[1] - lc2.bGiveIn4],                      // Step 4: Britain gives in (Argentina mobilized)
+    back5: [sq[0] - m - lc2.aBackDown5, sq[1] - m],              // Step 5: Argentina backs down (both mobilized)
+    give6: [g[0] - m - C.forceCost, g[1] - m - lc2.bGiveIn6],    // Step 6: Britain gives in after force
+    warA:  ev - C.cA - m,                                        // War (both mobilized)
+    warB:  { resolute: -ev - C.types.resolute.cB - m, weak: -ev - C.types.weak.cB - m }
+  };
+}
+function leafPay(leaf, type){ const p = P(); return leaf === "war" ? [p.warA, p.warB[type]] : p[leaf]; }
+
+// Prints a console warning if edited numbers break the logic the game is meant to teach.
+function checkPayoffLogic(){
+  const p = P(), w = [];
+  if (!(p.give6[1] > p.warB.weak))      w.push("A WEAK Britain should do better giving in than fighting at Step 6.");
+  if (!(p.warB.resolute > p.give6[1]))  w.push("A RESOLUTE Britain should do better fighting than giving in at Step 6.");
+  if (!(p.up3[1] > p.give2[1]))         w.push("A bluff should pay: Britain should do better when Argentina gives up (Step 3) than by giving in at Step 2.");
+  if (!(p.back5[1] > p.give4[1]))       w.push("A bluff should pay: Britain should do better when Argentina backs down (Step 5) than by giving in at Step 4.");
+  if (!(p.back5[0] > p.warA))           w.push("Calling a bluff should be risky: Argentina should prefer backing down to war with a resolute Britain.");
+  if (!(p.give6[0] > p.back5[0]))       w.push("Calling a weak Britain's bluff should pay off for Argentina.");
+  if (!(p.give2[1] > p.give4[1] && p.give4[1] > p.give6[1])) w.push("Britain's late concessions should cost more than early ones.");
+  if (!(p.sq1[0] > p.up3[0] && p.up3[0] > p.back5[0]))       w.push("Argentina's late retreats should cost more than early ones.");
+  if (!(p.warA + p.warB.resolute < p.give2[0] + p.give2[1])) w.push("War should waste value compared with a peaceful deal.");
+  w.forEach(x => console.warn("Payoff check: " + x));
+  return w;
+}
+
+/* =====================================================================
+   STATE AND RENDERING HELPERS
+   ===================================================================== */
+let S = null;            // current match state
+const TALLY = {};        // outcome counts per mode for this session (kept only while the page is open)
+let TIMER = null;        // pending computer move
+let ROUND = 0;           // increases on every new crisis or menu visit, so stale timers do nothing
+const root = document.getElementById("app");
+let ACTS = {}, actN = 0; // click handlers for elements with data-act
+function act(fn){ const id = "x" + (++actN); ACTS[id] = fn; return id; }
+function runAct(el){ const fn = ACTS[el.getAttribute("data-act")]; if (fn) fn(); }
+root.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]"); if (el) runAct(el);
+});
+root.addEventListener("keydown", e => {           // Enter/Space on the tappable tree branches
+  const el = e.target.closest("[data-act]");
+  if (el && el.tagName !== "BUTTON" && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); runAct(el); }
+});
+function screen(build, top){
+  ACTS = {}; root.innerHTML = build();
+  if (top) window.scrollTo(0, 0);
+  const af = root.querySelector("[data-autofocus]");
+  if (af) af.focus({ preventScroll: true });
+}
+const btn = (label, fn, cls, autofocus) =>
+  `<button${cls ? ` class="${cls}"` : ""}${autofocus ? " data-autofocus" : ""} data-act="${act(fn)}">${label}</button>`;
+
+/* ---------- Game structure ---------- */
+// The second option at every step is the "tough" one.
+const OPTIONS = {
+  1: ["nothing", "demand"], 2: ["givein", "reject"], 3: ["giveup", "mobilize"],
+  4: ["givein", "mobilizeToo"], 5: ["backdown", "force"], 6: ["givein", "fight"]
+};
+const LEAF_OF = { 1: "sq1", 2: "give2", 3: "up3", 4: "give4", 5: "back5", 6: "give6" };   // side branch at each step
+const STEPS = 6;
+const CONCEDE = new Set(["givein", "giveup", "backdown"]);
+const moverOf = n => (n % 2 ? "A" : "B");
+function nextOf(n, k){ return k === OPTIONS[n][0] ? LEAF_OF[n] : (n === STEPS ? "war" : n + 1); }
+const MODE_TXT = { A: "Argentina vs. computer", B: "Britain vs. computer", "2P": "Two players, one device" };
+
+/* ---------- Seats (who scores) and roles ---------- */
+const compRole = () => (S.mode === "A" ? "B" : "A");
+const personas = side => (side === "A" ? C.computerArgentina : C.computerBritain);
+const isHuman = role => S.mode === "2P" || role === S.mode;
+function seatOf(role){                              // which scorer plays this role in the current crisis
+  if (S.mode !== "2P") return role === S.mode ? "you" : "cpu";
+  const p1IsA = S.crisis % 2 === 1;                 // Player 1 is Argentina in crises 1, 3, 5...
+  return (role === "A") === p1IsA ? "p1" : "p2";
+}
+const SEAT_NAME = { you: "You", cpu: "Computer", p1: "Player 1", p2: "Player 2" };
+const roleOfSeat = seat => (seatOf("A") === seat ? "A" : "B");
+
+/* ---------- Game tree diagram (inline SVG) ---------- */
+const GAP = 80, Y0 = 34, WAR_Y = Y0 + GAP * (STEPS - 1) + 46;
+const NODES = Array.from({ length: STEPS }, (_, i) => {
+  const n = i + 1;
+  return { n, pl: moverOf(n), y: Y0 + GAP * i, side: OPTIONS[n][0], down: OPTIONS[n][1], leaf: LEAF_OF[n] };
+});
+// final = true on the end-of-crisis screen (everything revealed).
+function treeSVG(final){
+  const p = P();
+  const taken = new Set(S.history.map(h => h.node + ":" + h.action));
+  const reached = new Set(S.history.map(h => h.node));
+  const cur = S.leaf ? 0 : S.node;
+  if (cur) reached.add(cur);
+  const canTap = !final && S.choosing;               // true only on a human decision screen
+  const fadeIf = on => (on ? "" : ` class="fade"`);
+  const mark = key => (taken.has(key) ? " ✔" : "");
+  const pay = v => `A: ${f(v[0])}  |  B: ${f(v[1])}`;
+  const hit = (k, inner) => `<g class="hit" role="button" tabindex="0" aria-label="${A(k)}" data-act="${act(() => choose(k))}">${inner}</g>`;
+
+  let s = `<svg class="tree" viewBox="0 0 380 ${WAR_Y + 68}" role="group" aria-label="${treeAria(final)}">`;
+  NODES.forEach((N, i) => {
+    const y = N.y, y2 = i < STEPS - 1 ? NODES[i + 1].y - 20 : WAR_Y;
+    const ks = N.n + ":" + N.side, kd = N.n + ":" + N.down, now = N.n === cur;
+    // Side branch (ends the crisis at this step) and its end node
+    let side = `<line x1="80" y1="${y}" x2="190" y2="${y}" class="br${taken.has(ks) ? " taken" : ""}"/>
+      <text x="86" y="${y - 9}" class="bl${taken.has(ks) ? " taken" : ""}">${A(N.side)}${mark(ks)}</text>`;
+    // Down branch (continues to the next step)
+    let down = `<line x1="60" y1="${y + 20}" x2="60" y2="${y2}" class="br${taken.has(kd) ? " taken" : ""}"/>
+      <text x="70" y="${(y + 20 + y2) / 2 + 5}" class="bl${taken.has(kd) ? " taken" : ""}">${A(N.down)}${mark(kd)}</text>`;
+    if (canTap && now){
+      side = hit(N.side, `<rect class="hitbox" x="78" y="${y - 27}" width="112" height="37" rx="6"/>` + side);
+      down = hit(N.down, `<rect class="hitbox" x="38" y="${y + 22}" width="134" height="${y2 - y - 24}" rx="6"/>` + down);
+    }
+    const end = S.leaf === N.leaf;
+    s += `<g${fadeIf(taken.has(ks) || now)}>${side}
+      <rect x="190" y="${y - 24}" width="186" height="48" rx="6" class="leaf${end ? " end" : ""}"/>
+      <text x="283" y="${y - 5}" text-anchor="middle" class="ln">${end ? "✔ " : ""}${L.leaves[N.leaf]}</text>
+      <text x="283" y="${y + 14}" text-anchor="middle" class="lt">${pay(leafPay(N.leaf, S.type))}</text></g>`;
+    s += `<g${fadeIf(taken.has(kd) || now)}>${down}</g>`;
+    s += `<g${fadeIf(reached.has(N.n))}>
+      <circle cx="60" cy="${y}" r="20" class="node${now ? " cur" : ""}"/>
+      <text x="60" y="${y + 6}" text-anchor="middle" style="font-weight:800;font-size:17px">${N.pl}</text>
+      <text x="24" y="${y + 6}" text-anchor="middle" style="font-weight:700;font-size:15px">${now ? "▶" : ""}${N.n}</text></g>`;
+  });
+  // War end node: Britain's number depends on who is allowed to know the type.
+  let bWar;
+  if (final) bWar = `B: ${f(p.warB[S.type])} (${lc(TN(S.type))} Britain)`;
+  else if (S.viewer === "B") bWar = `B: ${f(p.warB[S.type])} (you are ${lc(TN(S.type))})`;
+  else bWar = `B: ${f(p.warB.resolute)} if resolute, ${f(p.warB.weak)} if weak`;
+  const endW = S.leaf === "war";
+  s += `<g${fadeIf(endW || cur === STEPS)}>
+    <rect x="6" y="${WAR_Y}" width="370" height="62" rx="6" class="leaf${endW ? " end" : ""}"/>
+    <text x="191" y="${WAR_Y + 20}" text-anchor="middle" class="ln">${endW ? "✔ " : ""}${L.leaves.war}</text>
+    <text x="191" y="${WAR_Y + 38}" text-anchor="middle" class="lt">A: ${f(p.warA)}</text>
+    <text x="191" y="${WAR_Y + 55}" text-anchor="middle" class="lt">${bWar}</text></g>`;
+  return s + "</svg>";
+}
+function treeAria(final){
+  const path = S.history.length ? " Path so far: " + S.history.map(h => `${L[h.pl]} ${lc(A(h.action))}`).join(", then ") + "." : "";
+  const now = final ? ` Crisis over: ${L.leaves[S.leaf]}.` : ` Now: step ${S.node}, ${L[moverOf(S.node)]} decides.`;
+  return `Escalation ladder with six steps. Argentina moves at steps 1, 3 and 5; Britain at steps 2, 4 and 6.${now}${path}`;
+}
+
+/* ---------- Common pieces of the play screen ---------- */
+function roleName(pl){ return S.mode === "2P" ? `${SEAT_NAME[seatOf(pl)]} (${L[pl]})` : L[pl]; }
+function scoreLine(){
+  const [a, b] = S.seats;
+  return `Crisis ${S.crisis} of ${S.matchLen} · ${SEAT_NAME[a]}: ${f(S.score[a])} · ${SEAT_NAME[b]}: ${f(S.score[b])}`;
+}
+function topbar(){
+  const who = S.mode === "2P"
+    ? `This crisis: Player 1 is ${L[roleOfSeat("p1")]}, Player 2 is ${L[roleOfSeat("p2")]}`
+    : `You are ${L[S.mode]} · the computer is ${L[compRole()]}`;
+  return `<div class="topbar"><p class="score"><b>${scoreLine()}</b><br><span class="small">${who}</span></p>${btn("Menu", showStart, "secondary")}</div>`;
+}
+function badge(){ return S.viewer === "B" ? `<p class="badge">${L.typeBadge[S.type]}</p>` : ""; }
+function gameScreen(panel, choices){
+  return topbar() + `<div class="layout">
+    <div class="card panel">${panel}</div>
+    <div class="card treewrap">${treeSVG(false)}<p class="stylized">${L.stylized}</p></div>
+    <div class="choices">${choices}</div></div>`;
+}
+
+/* =====================================================================
+   MATCH AND CRISIS FLOW
+   ===================================================================== */
+function pickWeighted(obj){                         // pick a key in proportion to obj[key].weight
+  const ks = Object.keys(obj), total = ks.reduce((a, k) => a + obj[k].weight, 0);
+  let r = Math.random() * total;
+  for (const k of ks){ r -= obj[k].weight; if (r < 0) return k; }
+  return ks[ks.length - 1];
+}
+function newMatch(mode){
+  let len = Math.max(1, Math.round(C.matchLength));
+  if (mode === "2P" && len % 2) len++;              // keep two-player matches fair
+  S = { mode, matchLen: len, crisis: 1, seats: mode === "2P" ? ["p1", "p2"] : ["you", "cpu"],
+        score: {}, log: [], memory: null, erratic: 0, guess: null, persona: null };
+  S.seats.forEach(s => (S.score[s] = 0));
+  if (mode !== "2P") S.persona = pickWeighted(personas(compRole()));   // fixed for the whole match
+  startCrisis();
+}
+function startCrisis(){
+  clearTimeout(TIMER); ROUND++;
+  S.type = Math.random() < C.q ? "resolute" : "weak";      // Britain's hidden type, redrawn every crisis
+  S.node = 1; S.leaf = null; S.history = []; S.choosing = false;
+  S.viewer = S.mode === "2P" ? null : S.mode;             // whose screen is showing
+  go(true);
+}
+function go(top){
+  if (S.leaf) return showCrisisResult();
+  const pl = moverOf(S.node);
+  if (!isHuman(pl)) return computerMove(pl);
+  if (S.mode === "2P" && S.viewer !== pl) return showHandoff(pl);
+  showDecision(pl, top);
+}
+function apply(k){
+  const n = S.node;
+  S.history.push({ node: n, pl: moverOf(n), action: k });
+  const nx = nextOf(n, k);
+  if (typeof nx === "number") S.node = nx; else { S.leaf = nx; finishCrisis(); }
+  go(false);
+}
+function finishCrisis(){
+  const pay = leafPay(S.leaf, S.type), seatA = seatOf("A"), seatB = seatOf("B");
+  S.score[seatA] += pay[0]; S.score[seatB] += pay[1];
+  S.log.push({ crisis: S.crisis, leaf: S.leaf, type: S.type, pay, seatA, seatB,
+               history: S.history.slice(), memoryBefore: S.memory });
+  if (S.mode !== "2P") S.memory = stanceAfter(S.history, S.mode, S.memory);
+  const T = TALLY[S.mode] || (TALLY[S.mode] = { crises: 0, resolute: 0, sq1: 0, give2: 0, up3: 0, give4: 0, back5: 0, give6: 0, war: 0 });
+  T.crises++; if (S.type === "resolute") T.resolute++; T[S.leaf]++;
+}
+function nextCrisis(){ S.crisis++; startCrisis(); }
+
+// What the computer remembers about the student's last crisis:
+// "conceded" (gave in, gave up, backed down), "firm" (ended on a tough move), or null (no signal).
+function stanceAfter(history, role, prev){
+  const mine = history.filter(h => h.pl === role);
+  if (!mine.length) return prev;                    // the student never moved: keep the old impression
+  const last = mine[mine.length - 1].action;
+  if (last === "nothing") return null;              // never pressed a claim: no signal either way
+  return CONCEDE.has(last) ? "conceded" : "firm";
+}
+
+/* ---------- Human decisions ---------- */
+function showDecision(pl, top){
+  const n = S.node;
+  S.choosing = true;
+  const notes = (n === 3 || n === 4 ? `<p class="small">${L.mobNote.replace("{m}", num(C.mobCost))}</p>` : "")
+              + (n === 1 ? `<p class="small">${L.hiddenTypeNote}</p>` : "");
+  screen(() => gameScreen(`<p class="small">Step ${n} of ${STEPS}</p>
+    <h2>You are ${roleName(pl)}</h2>${badge()}
+    <p class="situation">${L.situation[n]}</p>${notes}`,
+    OPTIONS[n].map((k, i) => btn(A(k), () => choose(k), "choice", i === 0)).join("")), top);
+}
+function choose(k){
+  if (!S.choosing) return;                          // ignore double taps
+  S.choosing = false;
+  apply(k);
+}
+
+/* ---------- Pass-and-play hand-off (two players) ---------- */
+function showHandoff(pl){
+  const other = pl === "A" ? "B" : "A", first = !S.history.length;
+  const me = SEAT_NAME[seatOf(pl)], them = SEAT_NAME[seatOf(other)];
+  S.choosing = false;
+  screen(() => `<div class="handoff card">
+    ${first ? `<p class="small">${scoreLine()}</p><h1>Crisis ${S.crisis}: ${me} is ${L[pl]}</h1>`
+            : `<h1>Hand the device to ${me} (${L[pl]})</h1>`}
+    <p style="font-size:1.2rem">${them} (${L[other]}), look away.</p>
+    ${btn(`I'm ${me}: show my screen`, () => { S.viewer = pl; go(true); }, "", true)}
+  </div>`, true);
+}
+
+/* ---------- Computer moves (hidden personality + memory + randomness) ---------- */
+const TOUGH_KEY = { 1: "demand", 2: "reject", 3: "mobilize", 4: "mobilize", 5: "force", 6: "fight" };
+// One computer move for a given side, personality, Britain type, step, and memory of the opponent.
+function botChoice(side, persona, type, n, memory){
+  const key = TOUGH_KEY[n], mem = memory === "conceded" ? 1 : memory === "firm" ? -1 : 0;
+  let p;
+  if (side === "A"){
+    const t = C.computerArgentina[persona];
+    p = t[key] + mem * C.memoryShift * t.memoryWeight;
+  } else {
+    const t = C.computerBritain[persona];
+    p = t[type][key] + (n === STEPS ? 0 : mem * C.memoryShift * t.memoryWeight);
+  }
+  let tough = Math.random() < clampP(p), erratic = false;
+  if (Math.random() < C.erraticProb){ tough = !tough; erratic = true; }
+  return { choice: OPTIONS[n][tough ? 1 : 0], erratic };
+}
+function computerChoice(pl){
+  const r = botChoice(pl, S.persona, S.type, S.node, S.memory);
+  if (r.erratic) S.erratic++;
+  return r.choice;
+}
+function computerMove(pl){
+  const n = S.node, round = ROUND, choice = computerChoice(pl);
+  S.choosing = false;
+  screen(() => gameScreen(`<p class="small">Step ${n} of ${STEPS}</p>
+    <h2>${L[pl]}'s move</h2>${badge()}
+    <p class="situation">${L.situation[n]}</p>`,
+    `<p class="thinking" role="status">${L[pl]} (computer) is thinking<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></p>`));
+  TIMER = setTimeout(() => { if (round === ROUND && S.node === n && !S.leaf) apply(choice); }, C.thinkingDelayMs);
+}
+
+/* =====================================================================
+   END OF A CRISIS
+   ===================================================================== */
+const bluffedIn = r => r.type === "weak" && r.history.some(h => h.pl === "B" && (h.action === "reject" || h.action === "mobilizeToo"));
+function takeaway(r){
+  const T = L.takeaways, res = r.type === "resolute";
+  switch (r.leaf){
+    case "war":   return res ? T.warResolute : T.warWeak;
+    case "give6": return res ? T.resoluteCaved : T.bluffCalled;    // a weak Britain here must have bluffed
+    case "back5": return res ? T.armsRace : T.bluffWorked;
+    case "give4": return res ? T.buildUpWorked : T.bluffCalled;
+    case "up3":   return res ? T.genuineReject : T.bluffWorked;
+    default:      return T.noWar;
+  }
+}
+function totalsLine(){ return S.seats.map(s => `${SEAT_NAME[s]}: ${f(S.score[s])}`).join(" · "); }
+function showCrisisResult(){
+  S.choosing = false;
+  const r = S.log[S.log.length - 1], last = S.crisis >= S.matchLen;
+  // Buttons must be built inside screen(), which resets the click-handler table first.
+  const next = () => !last ? btn("Next crisis", nextCrisis, "", true)
+             : S.mode === "2P" ? btn("See match results", showSummary, "", true)
+             : btn("Size up your opponent", showGuess, "", true);
+  screen(() => topbar() + `<div class="layout">
+    <div class="card panel">
+      ${S.mode === "2P" ? `<p class="small">Both players may look now.</p>` : ""}
+      <h1>${L.leaves[r.leaf]}</h1>
+      <p class="badge">Britain was ${TN(r.type).toUpperCase()}${bluffedIn(r) ? " and bluffed" : ""}</p>
+      <p><b>This crisis:</b> Argentina (${SEAT_NAME[r.seatA]}) ${f(r.pay[0])} · Britain (${SEAT_NAME[r.seatB]}) ${f(r.pay[1])}</p>
+      <p><b>Running totals:</b> ${totalsLine()}</p>
+      <p>${takeaway(r)}</p>
+      ${next()}
+    </div>
+    <div class="card treewrap">${treeSVG(true)}<p class="stylized">${L.stylized}</p></div>
+  </div>`, true);
+}
+
+/* =====================================================================
+   END OF THE MATCH
+   ===================================================================== */
+function showGuess(){
+  const side = compRole(), ps = personas(side);
+  screen(() => `<div class="topbar"><p class="score"><b>Match over · ${totalsLine()}</b></p>${btn("Menu", showStart, "secondary")}</div>
+    <div class="card"><h1>Size up your opponent</h1>
+    <p>What kind of ${L[side]} was the computer?</p>
+    ${Object.keys(ps).map((k, i) => btn(`${ps[k].label}<br><span class="small">${ps[k].hint}</span>`, () => { S.guess = k; showSummary(); }, "guess", i === 0)).join("")}
+    </div>`, true);
+}
+// One line of evidence from this match about how the computer actually played.
+function personaStats(){
+  const L2 = S.log, n = L2.length;
+  if (compRole() === "A"){
+    const dem = r => r.history[0].action === "demand";
+    const after = L2.filter(r => r.memoryBefore === "conceded");
+    let s = `It made a demand in ${L2.filter(dem).length} of ${n} crises`;
+    if (after.length) s += ` (${after.filter(dem).length} of ${after.length} right after you gave in or backed down)`;
+    return s + ".";
+  }
+  const faced = t => L2.filter(r => r.type === t && r.history.length > 1);
+  const resisted = rs => rs.filter(r => r.history[1].action === "reject").length;
+  const parts = ["weak", "resolute"].filter(t => faced(t).length)
+    .map(t => `when ${t} it rejected ${resisted(faced(t))} of ${faced(t).length} demands`);
+  if (!parts.length) return "You never made a demand, so it never had to show its hand.";
+  const s = parts.join("; ");
+  return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+}
+function revealHtml(){
+  const side = compRole(), ps = personas(side), truth = ps[S.persona];
+  const g = S.guess && ps[S.guess];
+  const verdict = g ? `<p>You guessed <b>${g.label}</b>: ${S.guess === S.persona ? `<span class="good">you got it!</span>` : `<span class="bad">not quite.</span>`}</p>` : "";
+  const err = S.erratic ? ` It also made ${S.erratic === 1 ? "one out-of-character move" : S.erratic + " out-of-character moves"}.` : "";
+  return `${verdict}<p>The computer was a <b>${truth.label.toUpperCase()}</b> ${L[side]}. ${truth.note}</p>
+    <p class="small">${personaStats()}${err}</p>`;
+}
+function tallyHtml(){
+  const T = TALLY[S.mode];
+  const row = (label, c) => `<tr><td>${label}</td><td>${c}</td><td>${Math.round(100 * c / T.crises)}%</td></tr>`;
+  return `<div class="card"><h2>Outcomes this session</h2>
+    <p class="small">${MODE_TXT[S.mode]}: ${T.crises} crisis${T.crises === 1 ? "" : "es"}. Resets when the page is reloaded.</p>
+    <table><tr><th>Outcome</th><th>Count</th><th>Share</th></tr>
+    ${["sq1", "give2", "up3", "give4", "back5", "give6", "war"].map(k => row(L.leaves[k], T[k])).join("")}
+    ${row("(Britain was resolute)", T.resolute)}</table></div>`;
+}
+function showSummary(){
+  clearTimeout(TIMER); ROUND++;
+  const [a, b] = S.seats, ta = S.score[a], tb = S.score[b];
+  let winner = "";                                  // solo: totals only, no winner declared
+  if (S.mode === "2P") winner = Math.abs(ta - tb) < 0.005 ? "It's a tie." : `${SEAT_NAME[ta > tb ? a : b]} wins the match!`;
+  const chips = S.log.map(r => `<li class="${r.leaf === "war" ? "war" : ""}"><b>${r.crisis}.</b> ${L.leaves[r.leaf]} <span class="small">(${r.type === "resolute" ? "R" : "W"}${S.mode === "2P" ? `, ${SEAT_NAME[r.seatA]} was Argentina` : ""})</span></li>`).join("");
+  const bluffs = S.log.filter(bluffedIn).length;
+  screen(() => `<div class="topbar"><h1>Match over</h1>${btn("Menu", showStart, "secondary")}</div>
+    <div class="card">
+      ${winner ? `<p style="font-size:1.25rem"><b>${winner}</b></p>` : ""}
+      <p><b>Final totals:</b> ${totalsLine()}</p>
+      <ol class="chips" aria-label="Outcome of each crisis">${chips}</ol>
+      <p class="small">R = Britain was resolute, W = Britain was weak.</p>
+    </div>
+    <div class="card">${S.mode === "2P"
+      ? `<p>Britain bluffed in ${bluffs} of ${S.log.length} crises.</p>`
+      : revealHtml()}
+      <p><b>${L.takeaways.reputation}</b></p>
+      ${btn("Play another match", () => newMatch(S.mode), "", true)}${btn("Change mode", showStart, "secondary")}
+    </div>
+    ${tallyHtml()}
+    <p class="stylized">${L.stylized}</p>`, true);
+}
+
+/* =====================================================================
+   START SCREEN
+   ===================================================================== */
+function showStart(){
+  clearTimeout(TIMER); ROUND++;
+  const m = S ? S.mode : "A";
+  const radio = (val, title) => `<label class="opt"><input type="radio" name="mode" value="${val}"${val === m ? " checked" : ""}><b>${title}</b></label>`;
+  screen(() => `<h1>${L.title}</h1>
+    <p>${L.intro}</p>
+    <fieldset class="card"><legend>Choose how to play</legend>
+      ${radio("A", "Play Argentina vs. computer")}
+      ${radio("B", "Play Britain vs. computer")}
+      ${radio("2P", "Two players, one device (swap sides each crisis)")}
+    </fieldset>
+    ${btn("Start", () => newMatch(root.querySelector("input[name=mode]:checked").value), "", true)}
+    <p class="stylized">${L.stylized} ${L.citation}</p>`, true);
+}
+
+checkPayoffLogic();
+showStart();
+</script>
+</body>
+</html>
